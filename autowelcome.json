@@ -1,0 +1,19 @@
+{
+  "enabled": true,
+  "triggers": [
+    {
+      "name": "Welcome",
+      "mode": "EQUALS",
+      "match": "↳ First 3 players to say welcome earn ⛃ 1.",
+      "response": "Welcome",
+      "minDelayTicks": 38,
+      "maxDelayTicks": 60,
+      "cooldownMs": 3000,
+      "enabled": true,
+      "ignoreCase": true
+    }
+  ]
+}
+
+
+put this into minecraft\config\primewelcome.json
