@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "${modid}",
+  "version": "${version}",
+  "name": "PrimeWelcome",
+  "description": "uhh blirp blorp blerp",
+  "authors": ["Lumi"],
+  "icon": "assets/primewelcome/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      {
+        "adapter": "kotlin",
+        "value": "lumi.ash.primewelcome.PrimeWelcome"
+      }
+    ]
+  },
+  "mixins": [
+    "primewelcome.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.17",
+    "fabric-api": "${fabricApiRequirement}",
+    "fabric-language-kotlin": "*",
+    "minecraft": "${minecraft}"
+  }
+}
