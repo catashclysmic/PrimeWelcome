@@ -31,8 +31,11 @@ data class Trigger(
     var maxDelayTicks: Int = 0,
     var cooldownMs: Long = 3000L,
     var enabled: Boolean = true,
-    var ignoreCase: Boolean = true
-)
+    var ignoreCase: Boolean = true,
+    var extraResponses: MutableList<String> = mutableListOf()
+) {
+    fun allResponses(): List<String> = listOf(response) + extraResponses
+}
 
 data class PrimeWelcomeConfig(
     var enabled: Boolean = true,
@@ -57,6 +60,9 @@ object ChatTriggers {
         "/primewelcome add <name> <mode> <trigger> => <response> - create a trigger",
         "    modes: contains, equals, starts_with, ends_with, regex",
         "    example: /primewelcome add greet contains hello there => Hey!",
+        "/primewelcome response add <name> <response> - add another random response",
+        "/primewelcome response remove <name> <number> - delete a response",
+        "/primewelcome response list <name> - show numbered responses",
         "/primewelcome remove <name> - delete a trigger",
         "/primewelcome toggle <name> - enable or disable a trigger",
         "/primewelcome delay <name> <ticks> - fixed delay before responding",
@@ -116,6 +122,39 @@ object ChatTriggers {
                                                 ClientCommands.argument("rest", StringArgumentType.greedyString())
                                                     .executes { add(it) }
                                             )
+                                    )
+                            )
+                    )
+                    .then(
+                        ClientCommands.literal("response")
+                            .then(
+                                ClientCommands.literal("add")
+                                    .then(
+                                        ClientCommands.argument("name", StringArgumentType.word())
+                                            .suggests(names)
+                                            .then(
+                                                ClientCommands.argument("text", StringArgumentType.greedyString())
+                                                    .executes { responseAdd(it) }
+                                            )
+                                    )
+                            )
+                            .then(
+                                ClientCommands.literal("remove")
+                                    .then(
+                                        ClientCommands.argument("name", StringArgumentType.word())
+                                            .suggests(names)
+                                            .then(
+                                                ClientCommands.argument("number", IntegerArgumentType.integer(1))
+                                                    .executes { responseRemove(it) }
+                                            )
+                                    )
+                            )
+                            .then(
+                                ClientCommands.literal("list")
+                                    .then(
+                                        ClientCommands.argument("name", StringArgumentType.word())
+                                            .suggests(names)
+                                            .executes { responseList(it) }
                                     )
                             )
                     )
@@ -236,7 +275,7 @@ object ChatTriggers {
     }
 
     private fun fire(t: Trigger, raw: String, groups: List<String>) {
-        val text = fill(t.response, raw, groups)
+        val text = fill(t.allResponses().random(), raw, groups)
         val low = minOf(t.minDelayTicks, t.maxDelayTicks)
         val high = maxOf(t.minDelayTicks, t.maxDelayTicks)
         val delay = if (high <= 0) 0 else Random.nextInt(low, high + 1)
@@ -325,6 +364,60 @@ object ChatTriggers {
         save()
         reply(ctx, "Added trigger $name")
         return 1
+    }
+
+    private fun responseAdd(ctx: CommandContext<FabricClientCommandSource>): Int {
+        val t = find(StringArgumentType.getString(ctx, "name"))
+        if (t == null) {
+            reply(ctx, "Trigger not found")
+            return 0
+        }
+        val text = StringArgumentType.getString(ctx, "text").trim()
+        if (text.isEmpty()) {
+            reply(ctx, "The response can't be empty")
+            return 0
+        }
+        t.extraResponses.add(text)
+        save()
+        reply(ctx, "Added response #${t.allResponses().size} to ${t.name}")
+        return 1
+    }
+
+    private fun responseRemove(ctx: CommandContext<FabricClientCommandSource>): Int {
+        val t = find(StringArgumentType.getString(ctx, "name"))
+        if (t == null) {
+            reply(ctx, "Trigger not found")
+            return 0
+        }
+        val number = IntegerArgumentType.getInteger(ctx, "number")
+        val count = t.allResponses().size
+        if (number > count) {
+            reply(ctx, "${t.name} only has $count response(s)")
+            return 0
+        }
+        if (count == 1) {
+            reply(ctx, "Can't remove the only response. Use /primewelcome remove ${t.name} instead")
+            return 0
+        }
+        if (number == 1) {
+            t.response = t.extraResponses.removeAt(0)
+        } else {
+            t.extraResponses.removeAt(number - 2)
+        }
+        save()
+        reply(ctx, "Removed response #$number from ${t.name}")
+        return 1
+    }
+
+    private fun responseList(ctx: CommandContext<FabricClientCommandSource>): Int {
+        val t = find(StringArgumentType.getString(ctx, "name"))
+        if (t == null) {
+            reply(ctx, "Trigger not found")
+            return 0
+        }
+        val all = t.allResponses()
+        all.forEachIndexed { i, r -> reply(ctx, "${i + 1}. $r") }
+        return all.size
     }
 
     private fun remove(ctx: CommandContext<FabricClientCommandSource>): Int {
@@ -448,7 +541,8 @@ object ChatTriggers {
         config.triggers.forEach {
             val state = if (it.enabled) "on" else "off"
             val delay = if (it.minDelayTicks == it.maxDelayTicks) "${it.minDelayTicks}t" else "${it.minDelayTicks}-${it.maxDelayTicks}t"
-            reply(ctx, "[$state] ${it.name} (${it.mode.name.lowercase()}) ${it.match} => ${it.response} | delay $delay, cooldown ${it.cooldownMs}ms")
+            val more = if (it.extraResponses.isEmpty()) "" else " (+${it.extraResponses.size} more)"
+            reply(ctx, "[$state] ${it.name} (${it.mode.name.lowercase()}) ${it.match} => ${it.response}$more | delay $delay, cooldown ${it.cooldownMs}ms")
         }
         return config.triggers.size
     }
